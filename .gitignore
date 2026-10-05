@@ -1,0 +1,51 @@
+HELP.md
+target/
+!.mvn/wrapper/maven-wrapper.jar
+!**/src/main/**/target/
+!**/src/test/**/target/
+
+### STS ###
+.apt_generated
+.classpath
+.factorypath
+.project
+.settings
+.springBeans
+.sts4-cache
+
+### Custom ###
+# 本地私有配置（含腾讯云 COS、火山方舟密钥），绝不提交
+application-local.yml
+
+# 本地配置的备份/副本，同样不能提交
+*-local.yml
+application-local.yml.bak
+application-local.yml.old
+
+# 腾讯云控制台导出的密钥 CSV、filter-repo 替换清单
+# 若以后确实要提交测试用的 CSV 数据，把 *.csv 换成更精确的 *SecretKey*.csv
+*.csv
+secrets.txt
+
+# 日志
+*.log
+logs/
+
+### IntelliJ IDEA ###
+.idea
+*.iws
+*.iml
+*.ipr
+
+### NetBeans ###
+/nbproject/private/
+/nbbuild/
+/dist/
+/nbdist/
+/.nb-gradle/
+build/
+!**/src/main/**/build/
+!**/src/test/**/build/
+
+### VS Code ###
+.vscode/

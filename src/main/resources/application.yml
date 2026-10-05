@@ -1,0 +1,71 @@
+server:
+  port: 8123
+  servlet:
+    context-path: /api
+    # cookie 30 天过期
+    session:
+      cookie:
+        max-age: 2592000
+spring:
+  application:
+    name: zjj-picture-backend
+  # 激活本地私有配置 application-local.yml（该文件已被 .gitignore 忽略，不会提交）
+  profiles:
+    active: local
+  # 数据库配置
+  datasource:
+    driver-class-name: com.mysql.cj.jdbc.Driver
+    url: jdbc:mysql://localhost:3306/zjj_picture
+    username: root
+    password: ${MYSQL_PASSWORD:123456}
+  # session 配置
+  session:
+    store-type: redis
+    # session 30 天过期
+    timeout: 2592000
+  # Redis 配置
+  redis:
+    database: 0
+    host: 127.0.0.1
+    port: 6379
+  # 开放更大的文件上传体积
+  servlet:
+    multipart:
+      max-file-size: 10MB
+mybatis-plus:
+  configuration:
+    map-underscore-to-camel-case: false
+    # 控制台打印 SQL 日志，生产环境请关闭
+    log-impl: org.apache.ibatis.logging.stdout.StdOutImpl
+  global-config:
+    db-config:
+      logic-delete-field: isDelete # 逻辑删除字段名
+      logic-delete-value: 1 # 已删除
+      logic-not-delete-value: 0 # 未删除
+# 接口文档配置
+knife4j:
+  enable: true
+  openapi:
+    title: "zjj-picture-backend 接口文档"
+    version: 1.0
+    group:
+      default:
+        api-rule: package
+        api-rule-resources:
+          - com.zjj.zjjpicturebackend.controller
+# ============================================================
+# 以下密钥全部用占位符，真实值放在 application-local.yml（不提交）
+# 或通过环境变量注入，禁止再写死在本文件里
+# ============================================================
+# 腾讯云 COS
+cos:
+  client:
+    host: https://zjj-picture-save-1369308087.cos.ap-nanjing.myqcloud.com
+    secretId: ${COS_SECRET_ID:}
+    secretKey: ${COS_SECRET_KEY:}
+    region: ap-nanjing
+    bucket: zjj-picture-save-1369308087
+# 火山方舟（豆包 AI）
+ai:
+  doubao:
+    api-key: ${ARK_API_KEY:}
