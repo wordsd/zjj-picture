@@ -3,6 +3,7 @@ package com.zjj.zjjpicturebackend.service.impl;
 import cn.hutool.core.collection.CollUtil;
 import cn.hutool.core.util.ObjUtil;
 import cn.hutool.core.util.StrUtil;
+import cn.hutool.json.JSONUtil;
 import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
@@ -15,10 +16,7 @@ import com.zjj.zjjpicturebackend.manager.upload.FilePictureUpload;
 import com.zjj.zjjpicturebackend.manager.upload.PictureUploadTemplate;
 import com.zjj.zjjpicturebackend.manager.upload.UrlPictureUpload;
 import com.zjj.zjjpicturebackend.model.dto.file.UploadPictureResult;
-import com.zjj.zjjpicturebackend.model.dto.picture.PictureQueryRequest;
-import com.zjj.zjjpicturebackend.model.dto.picture.PictureReviewRequest;
-import com.zjj.zjjpicturebackend.model.dto.picture.PictureUpLoadRequest;
-import com.zjj.zjjpicturebackend.model.dto.picture.PictureUploadByBatchRequest;
+import com.zjj.zjjpicturebackend.model.dto.picture.*;
 import com.zjj.zjjpicturebackend.model.dto.space.Space;
 import com.zjj.zjjpicturebackend.model.entity.Picture;
 import com.zjj.zjjpicturebackend.model.entity.User;
@@ -29,6 +27,7 @@ import com.zjj.zjjpicturebackend.service.PictureService;
 import com.zjj.zjjpicturebackend.mapper.PictureMapper;
 import com.zjj.zjjpicturebackend.service.SpaceService;
 import com.zjj.zjjpicturebackend.service.UserService;
+import com.zjj.zjjpicturebackend.utils.ColorSimilarUtils;
 import jakarta.annotation.Resource;
 import jakarta.servlet.http.HttpServletRequest;
 import lombok.extern.slf4j.Slf4j;
@@ -42,11 +41,10 @@ import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.support.TransactionTemplate;
 
+import java.awt.*;
 import java.io.IOException;
-import java.util.Date;
+import java.util.*;
 import java.util.List;
-import java.util.Map;
-import java.util.Set;
 import java.util.stream.Collectors;
 
 /**
@@ -94,14 +92,14 @@ public class PictureServiceImpl extends ServiceImpl<PictureMapper, Picture>
             Space space = spaceService.getById(spaceId);
             ThrowUtils.throwIf(space == null, ErrorCode.NOT_FOUND_ERROR, "空间不存在");
             //必须是空间的管理员才能操作
-            if(!loginUser.getId().equals(space.getUserId())){
+            if (!loginUser.getId().equals(space.getUserId())) {
                 ThrowUtils.throwIf(!userService.isAdmin(loginUser), ErrorCode.FORBIDDEN_ERROR, "无权限操作");
             }
-            if(space.getTotalCount()>=space.getMaxCount()){
-                throw new BusinessException(ErrorCode.FORBIDDEN_ERROR,"空间条数不够");
+            if (space.getTotalCount() >= space.getMaxCount()) {
+                throw new BusinessException(ErrorCode.FORBIDDEN_ERROR, "空间条数不够");
             }
-            if(space.getTotalSize()>=space.getMaxSize()){
-                throw new BusinessException(ErrorCode.OPERATION_ERROR,"空间大小不够");
+            if (space.getTotalSize() >= space.getMaxSize()) {
+                throw new BusinessException(ErrorCode.OPERATION_ERROR, "空间大小不够");
             }
         }
         //判断室更新还是新增图片
@@ -123,19 +121,19 @@ public class PictureServiceImpl extends ServiceImpl<PictureMapper, Picture>
             //校验空间是否一致
             //没传sapceId则默认为原空间
             if (spaceId == null) {
-                if(oldPicture.getSpaceId()!=null){
-                    spaceId=oldPicture.getSpaceId();
+                if (oldPicture.getSpaceId() != null) {
+                    spaceId = oldPicture.getSpaceId();
                 }
-            }else{
+            } else {
                 ThrowUtils.throwIf(!oldPicture.getSpaceId().equals(spaceId), ErrorCode.FORBIDDEN_ERROR, "无权限编辑图片");
             }
         }
         //上传图片，根据用户id划分目录
         String uploadPathPrefix;
-        if(spaceId==null){
-             uploadPathPrefix = String.format("public/%s", loginUser.getId());
-        }else{
-             uploadPathPrefix = String.format("space/%s", spaceId);
+        if (spaceId == null) {
+            uploadPathPrefix = String.format("public/%s", loginUser.getId());
+        } else {
+            uploadPathPrefix = String.format("space/%s", spaceId);
         }
 
         //跟据文件类型区分上传方式
@@ -155,10 +153,11 @@ public class PictureServiceImpl extends ServiceImpl<PictureMapper, Picture>
         picture.setPicScale(uploadPictureResult.getPicScale());
         picture.setPicFormat(uploadPictureResult.getPicFormat());
         picture.setUserId(loginUser.getId());
+        picture.setPicColor(uploadPictureResult.getPicColor());
         String picName = uploadPictureResult.getPicName();
         picture.setSpaceId(spaceId);
-        if(pictureUpLoadRequest!=null&&StrUtil.isNotBlank(pictureUpLoadRequest.getPicName())){
-            picName=pictureUpLoadRequest.getPicName();
+        if (pictureUpLoadRequest != null && StrUtil.isNotBlank(pictureUpLoadRequest.getPicName())) {
+            picName = pictureUpLoadRequest.getPicName();
         }
         picture.setName(picName);
         //补充审核参数
@@ -210,6 +209,7 @@ public class PictureServiceImpl extends ServiceImpl<PictureMapper, Picture>
         }
 
     }
+
     /**
      * 分页获取图片封装
      */
@@ -332,6 +332,110 @@ public class PictureServiceImpl extends ServiceImpl<PictureMapper, Picture>
     }
 
     /**
+     * 颜色搜索图片
+     * @param spaceId
+     * @param picColor
+     * @param loginUser
+     * @return
+     */
+    @Override
+    public List<PictureVO> searchPictureByColor(Long spaceId, String picColor, User loginUser) {
+        //1、检验参数
+        ThrowUtils.throwIf(spaceId == null || StrUtil.isBlank(picColor), ErrorCode.PARAMS_ERROR);
+        ThrowUtils.throwIf(loginUser == null, ErrorCode.NO_AUTH_ERROR);
+        //2、校验空间权限
+        Space space = spaceService.getById(spaceId);
+        ThrowUtils.throwIf(space == null, ErrorCode.NOT_FOUND_ERROR, "空间不存在");
+        ThrowUtils.throwIf(!space.getUserId().equals(loginUser.getId()), ErrorCode.NO_AUTH_ERROR, "没有权限");
+        //3、查询该空间下的所有图片
+        List<Picture> pictureList = this.lambdaQuery().eq(Picture::getSpaceId, spaceId).isNotNull(Picture::getPicColor).list();
+        //没有图片直接返回空列表
+        if (CollUtil.isEmpty(pictureList)) {
+            return Collections.emptyList();
+        }
+        //将目标颜色转换为Color对象
+        Color targetColor = Color.decode(picColor);
+        //4、根据相似度排序
+        List<Picture> sortedPictures = pictureList.stream().sorted(Comparator.comparingDouble(picture -> {
+                    //提取图片主色调
+                    String hexColor = picture.getPicColor();
+                    //没有主色调放到最后
+                    if (StrUtil.isBlank(hexColor)) {
+                        return Double.MAX_VALUE;
+                    }
+                    Color pictureColor = Color.decode(hexColor);
+                    //越大越相似
+                    return -ColorSimilarUtils.calculateSimilarity(targetColor, pictureColor);
+                }))
+                .limit(12)
+                .collect(Collectors.toList());
+        //5、封装返回值
+        return sortedPictures.stream().map(PictureVO::objToVo).collect(Collectors.toList());
+    }
+
+    /**
+     * 批量编辑图片
+     * @param pictureEditByBatchRequest
+     * @param loginUser
+     */
+    @Override
+    public void editPictureBatch(PictureEditByBatchRequest pictureEditByBatchRequest, User loginUser) {
+        List<Long> pictureIdList = pictureEditByBatchRequest.getPictureIdList();
+        Long spaceId = pictureEditByBatchRequest.getSpaceId();
+        String category = pictureEditByBatchRequest.getCategory();
+        List<String> tags = pictureEditByBatchRequest.getTags();
+        String nameRule = pictureEditByBatchRequest.getNameRule();
+        //校验参数
+        ThrowUtils.throwIf(spaceId==null||CollUtil.isEmpty(pictureIdList), ErrorCode.PARAMS_ERROR);
+        ThrowUtils.throwIf(loginUser == null, ErrorCode.NO_AUTH_ERROR);
+        //校验空间权限
+        Space space = spaceService.getById(spaceId);
+        ThrowUtils.throwIf(space == null, ErrorCode.NOT_FOUND_ERROR, "空间不存在");
+        ThrowUtils.throwIf(!space.getUserId().equals(loginUser.getId()), ErrorCode.NO_AUTH_ERROR, "没有权限");
+        //查询指定图片
+        List<Picture> pictureList = this.lambdaQuery().select(Picture::getId, Picture::getSpaceId)
+                .eq(Picture::getSpaceId, spaceId)
+                .in(Picture::getId, pictureIdList)
+                .list();
+        if (pictureList.isEmpty()){
+            return;
+        }
+        //更新分类和标签
+        pictureList.forEach(picture -> {
+            if(StrUtil.isNotBlank(category)){
+                picture.setCategory(category);
+            }
+            if(CollUtil.isNotEmpty(tags)){
+                picture.setTags(JSONUtil.toJsonStr(tags));
+            }
+        });
+        fillPictureWithName(pictureList, nameRule);
+        //批量更新
+        boolean result = this.updateBatchById(pictureList);
+        ThrowUtils.throwIf(!result, ErrorCode.OPERATION_ERROR, "批量更新失败");
+    }
+
+    /**
+     * 填充图片名称
+     * @param pictureList
+     * @param nameRule
+     */
+    private void fillPictureWithName(List<Picture> pictureList, String nameRule) {
+        if (CollUtil.isEmpty(pictureList) || StrUtil.isBlank(nameRule)) {
+            return;
+        }
+        long count=1;
+        try{
+            for(Picture picture : pictureList) {
+                nameRule.replaceAll("\\{序号}",String.valueOf(count++));
+                picture.setName(nameRule);
+            }
+        }catch (Exception e){
+            ThrowUtils.throwIf(true, ErrorCode.PARAMS_ERROR, "命名规则有误");
+        }
+    }
+
+    /**
      * 图片审核
      *
      * @param pictureReviewRequest
@@ -398,6 +502,10 @@ public class PictureServiceImpl extends ServiceImpl<PictureMapper, Picture>
         Long reviewerId = pictureQueryRequest.getReviewerId();
         Long spaceId = pictureQueryRequest.getSpaceId();
         boolean nullSpaceId = pictureQueryRequest.isNullSpaceId();
+        Date startEditTime = pictureQueryRequest.getStartEditTime();
+        Date endEditTime = pictureQueryRequest.getEndEditTime();
+
+
         // 从多字段中搜索
         if (StrUtil.isNotBlank(searchText)) {
             // 需要拼接查询条件
@@ -406,7 +514,8 @@ public class PictureServiceImpl extends ServiceImpl<PictureMapper, Picture>
                     .like("introduction", searchText)
             );
         }
-
+        queryWrapper.ge(ObjUtil.isNotEmpty(startEditTime), "editTime", startEditTime);
+        queryWrapper.lt(ObjUtil.isNotEmpty(endEditTime), "editTime", endEditTime);
         queryWrapper.eq(ObjUtil.isNotEmpty(reviewStatus), "reviewStatus", reviewStatus);
         queryWrapper.like(StrUtil.isNotBlank(reviewMessage), "reviewMessage", reviewMessage);
         queryWrapper.eq(ObjUtil.isNotEmpty(reviewerId), "reviewerId", reviewerId);
@@ -492,18 +601,17 @@ public class PictureServiceImpl extends ServiceImpl<PictureMapper, Picture>
     }
 
 
-
     @Override
     public void checkPictureAuth(User loginUser, Picture picture) {
-        Long  spaceId = picture.getSpaceId();
-        if(spaceId==null){
+        Long spaceId = picture.getSpaceId();
+        if (spaceId == null) {
             //公共图库，仅本人或管理员可以操作
-            if(!picture.getUserId().equals(loginUser.getId())&&!userService.isAdmin(loginUser)) {
+            if (!picture.getUserId().equals(loginUser.getId()) && !userService.isAdmin(loginUser)) {
                 throw new BusinessException(ErrorCode.NO_AUTH_ERROR);
             }
-        }else{
+        } else {
             //私有图库，仅本人可以操作
-            if(!picture.getUserId().equals(loginUser.getId())) {
+            if (!picture.getUserId().equals(loginUser.getId())) {
                 throw new BusinessException(ErrorCode.NO_AUTH_ERROR);
             }
         }

@@ -3,10 +3,7 @@ package com.zjj.zjjpicturebackend.service;
 
 import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
-import com.zjj.zjjpicturebackend.model.dto.picture.PictureQueryRequest;
-import com.zjj.zjjpicturebackend.model.dto.picture.PictureReviewRequest;
-import com.zjj.zjjpicturebackend.model.dto.picture.PictureUpLoadRequest;
-import com.zjj.zjjpicturebackend.model.dto.picture.PictureUploadByBatchRequest;
+import com.zjj.zjjpicturebackend.model.dto.picture.*;
 import com.zjj.zjjpicturebackend.model.entity.Picture;
 import com.baomidou.mybatisplus.extension.service.IService;
 import com.zjj.zjjpicturebackend.model.entity.User;
@@ -51,6 +48,23 @@ public interface PictureService extends IService<Picture> {
      * @return
      */
     Integer uploadPictureByBatch(PictureUploadByBatchRequest pictureUploadByBatchRequest,User loginUser);
+
+    /**
+     * 颜色搜索图片
+     * @param spaceId
+     * @param picColor
+     * @param loginUser
+     * @return
+     */
+    List<PictureVO> searchPictureByColor(Long spaceId, String picColor, User loginUser);
+
+    /**
+     * 批量编辑图片
+     * @param pictureEditByBatchRequest
+     * @param loginUser
+     */
+    void editPictureBatch(PictureEditByBatchRequest pictureEditByBatchRequest, User loginUser);
+
     /**
      * 审核图片
      * @param pictureReviewRequest

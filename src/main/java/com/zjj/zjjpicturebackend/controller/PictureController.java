@@ -14,7 +14,8 @@ import com.zjj.zjjpicturebackend.constant.UserConstant;
 import com.zjj.zjjpicturebackend.exception.BusinessException;
 import com.zjj.zjjpicturebackend.exception.ErrorCode;
 import com.zjj.zjjpicturebackend.exception.ThrowUtils;
-import com.zjj.zjjpicturebackend.manager.upload.PictureUploadTemplate;
+import com.zjj.zjjpicturebackend.imageSearch.sub.ImageSearchApiFacade;
+import com.zjj.zjjpicturebackend.model.ImageSearchResult;
 import com.zjj.zjjpicturebackend.model.dto.picture.*;
 import com.zjj.zjjpicturebackend.model.dto.space.Space;
 import com.zjj.zjjpicturebackend.model.entity.Picture;
@@ -27,7 +28,6 @@ import com.zjj.zjjpicturebackend.service.UserService;
 import jakarta.annotation.Resource;
 import jakarta.servlet.http.HttpServletRequest;
 import org.springframework.beans.BeanUtils;
-import org.springframework.boot.autoconfigure.cache.CacheProperties;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.transaction.TransactionException;
 import org.springframework.transaction.support.TransactionTemplate;
@@ -343,6 +343,49 @@ public class PictureController {
         ThrowUtils.throwIf(pictureReviewRequest == null, ErrorCode.PARAMS_ERROR);
         User loginUser = userService.getLoginUser(request);
         pictureService.doPictureReview(pictureReviewRequest, loginUser);
+        return ResultUtils.success(true);
+    }
+    /**
+     * 以图搜图
+     */
+    @PostMapping("/search/picture")
+    public BaseResponse<List<ImageSearchResult>> searchPictureByPicture(@RequestBody SearchPictureByPictureRequest searchPictureByPictureRequest) {
+        ThrowUtils.throwIf(searchPictureByPictureRequest == null, ErrorCode.PARAMS_ERROR);
+        Long pictureId = searchPictureByPictureRequest.getPictureId();
+        ThrowUtils.throwIf(pictureId == null || pictureId <= 0, ErrorCode.PARAMS_ERROR);
+        Picture oldPicture = pictureService.getById(pictureId);
+        ThrowUtils.throwIf(oldPicture == null, ErrorCode.NOT_FOUND_ERROR);
+        List<ImageSearchResult> resultList = ImageSearchApiFacade.searchImage(oldPicture.getUrl());
+        return ResultUtils.success(resultList);
+    }
+
+    /**
+     * 颜色搜索图片
+     * @param searchPictureByColorRequest
+     * @param request
+     * @return
+     */
+    @PostMapping("/search/color")
+    public BaseResponse<List<PictureVO>> searchPictureByColor(@RequestBody SearchPictureByColorRequest searchPictureByColorRequest, HttpServletRequest request) {
+        ThrowUtils.throwIf(searchPictureByColorRequest == null, ErrorCode.PARAMS_ERROR);
+        String picColor = searchPictureByColorRequest.getPicColor();
+        Long spaceId = searchPictureByColorRequest.getSpaceId();
+        User loginUser = userService.getLoginUser(request);
+        List<PictureVO> result = pictureService.searchPictureByColor(spaceId, picColor, loginUser);
+        return ResultUtils.success(result);
+    }
+
+    /**
+     * 批量编辑图片（给管理员使用）
+     * @param pictureEditByBatchRequest
+     * @param request
+     * @return
+     */
+    @PostMapping("/edit/batch")
+    public BaseResponse<Boolean> editPictureByBatch(@RequestBody PictureEditByBatchRequest pictureEditByBatchRequest, HttpServletRequest request) {
+        ThrowUtils.throwIf(pictureEditByBatchRequest == null, ErrorCode.PARAMS_ERROR);
+        User loginUser = userService.getLoginUser(request);
+        pictureService.editPictureBatch(pictureEditByBatchRequest, loginUser);
         return ResultUtils.success(true);
     }
 
