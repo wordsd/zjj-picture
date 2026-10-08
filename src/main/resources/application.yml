@@ -69,3 +69,11 @@ cos:
 ai:
   doubao:
     api-key: ${ARK_API_KEY:}
+# 阿里云百炼（DashScope）—— 文生图 / 图生图
+aliYunAi:
+  api-key: ${DASHSCOPE_API_KEY:}
+  # 可选：工作空间专属域名，形如 https://{WorkspaceId}.cn-beijing.maas.aliyuncs.com
+  # 留空则使用通用域名 https://dashscope.aliyuncs.com（官方文档说明两者功能一致）
+  base-url: ${DASHSCOPE_BASE_URL:}
+  # 可选：qwen-image-3.0-pro / qwen-image-3.0 / qwen-image-2.1-pro
+  model: ${DASHSCOPE_IMAGE_MODEL:qwen-image-3.0-pro}

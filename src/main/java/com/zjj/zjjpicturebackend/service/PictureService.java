@@ -3,6 +3,7 @@ package com.zjj.zjjpicturebackend.service;
 
 import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
+import com.zjj.zjjpicturebackend.aliyunAi.model.CreateImageGenerationTaskResponse;
 import com.zjj.zjjpicturebackend.model.dto.picture.*;
 import com.zjj.zjjpicturebackend.model.entity.Picture;
 import com.baomidou.mybatisplus.extension.service.IService;
@@ -100,4 +101,15 @@ public interface PictureService extends IService<Picture> {
     void fillReviewParams(Picture picture, User loginUser);
 
     void checkPictureAuth(User loginUser, Picture picture);
+
+    /**
+     * 创建 AI 生图任务（文生图 / 图生图）
+     * <p>
+     * 请求里的 pictureId 为空表示文生图，不为空表示以该图为参考做图生图
+     *
+     * @param createPictureAiImageRequest 生图请求
+     * @param loginUser                   当前登录用户
+     * @return 任务受理信息（含 taskId）
+     */
+    CreateImageGenerationTaskResponse createPictureAiImageTask(CreatePictureAiImageRequest createPictureAiImageRequest, User loginUser);
 }

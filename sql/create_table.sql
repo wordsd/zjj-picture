@@ -101,3 +101,69 @@ CREATE INDEX idx_spaceId ON picture (spaceId);
 
 ALTER TABLE picture
     ADD COLUMN picColor varchar(16) null comment '图片主色调';
+
+
+-- 压测账号注入
+-- 1、哈希长度
+SELECT userAccount, userPassword, LENGTH(userPassword) AS 哈希长度
+FROM user
+WHERE userAccount = 'perf_user_1';
+-- 2、看user表 id字段是否有 AUTO_INCREMENT
+SHOW CREATE TABLE user;
+
+-- 3、插入数据
+INSERT INTO user (userAccount, userPassword, userName, userAvatar, userProfile,
+                  userRole, shareCode, editTime, createTime, updateTime, isDelete)
+SELECT
+    CONCAT('perf_user_', n)                                   AS userAccount,
+    'b6cf17a0b267119ff92c4d54d985fc4e'                         AS userPassword,
+    CONCAT('压测用户', n)                                      AS userName,
+    'https://www.code-nav.cn/logo.png'                        AS userAvatar,
+    CONCAT('这是第 ', n, ' 个压测账号，用于性能测试')            AS userProfile,
+    'user'                                                    AS userRole,
+    CONCAT('perf', LPAD(n, 6, '0'))                           AS shareCode,
+    NOW(), NOW(), NOW(), 0
+FROM (
+         SELECT (a.n + b.n * 10 + c.n * 100) + 2 AS n
+         FROM
+             (SELECT 0 AS n UNION ALL SELECT 1 UNION ALL SELECT 2 UNION ALL SELECT 3 UNION ALL SELECT 4
+              UNION ALL SELECT 5 UNION ALL SELECT 6 UNION ALL SELECT 7 UNION ALL SELECT 8 UNION ALL SELECT 9) a
+                 CROSS JOIN
+             (SELECT 0 AS n UNION ALL SELECT 1 UNION ALL SELECT 2 UNION ALL SELECT 3 UNION ALL SELECT 4
+              UNION ALL SELECT 5 UNION ALL SELECT 6 UNION ALL SELECT 7 UNION ALL SELECT 8 UNION ALL SELECT 9) b
+                 CROSS JOIN
+             (SELECT 0 AS n UNION ALL SELECT 1 UNION ALL SELECT 2 UNION ALL SELECT 3 UNION ALL SELECT 4) c
+     ) nums
+WHERE n <= 500;
+
+
+-- 验证 1、
+SELECT
+    COUNT(*)                     AS 账号数,
+    COUNT(DISTINCT userPassword) AS 不同哈希数,
+    LENGTH(MAX(userPassword))    AS 哈希长度,
+    MIN(userAccount)             AS 最小账号,
+    MAX(userAccount)             AS 最大账号
+FROM user
+WHERE userAccount LIKE 'perf_user_%';
+-- 验证 2、
+SELECT
+    MIN(CAST(SUBSTRING(userAccount, 11) AS UNSIGNED)) AS 最小编号,
+    MAX(CAST(SUBSTRING(userAccount, 11) AS UNSIGNED)) AS 最大编号,
+    COUNT(DISTINCT CAST(SUBSTRING(userAccount, 11) AS UNSIGNED)) AS 编号个数
+FROM user
+WHERE userAccount LIKE 'perf_user_%';
+
+-- 验证 3、
+SELECT userAccount, COUNT(*) AS 重复次数
+FROM user
+WHERE userAccount LIKE 'perf_user_%'
+GROUP BY userAccount
+HAVING COUNT(*) > 1;
+-- 期望：无输出
+
+--  导出500个真实id
+SELECT id
+FROM user
+WHERE userAccount LIKE 'perf_user_%'
+ORDER BY CAST(SUBSTRING(userAccount, 11) AS UNSIGNED);

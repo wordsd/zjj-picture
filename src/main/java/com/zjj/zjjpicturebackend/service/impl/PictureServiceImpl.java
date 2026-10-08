@@ -7,6 +7,9 @@ import cn.hutool.json.JSONUtil;
 import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
+import com.zjj.zjjpicturebackend.aliyunAi.AliYunAiApi;
+import com.zjj.zjjpicturebackend.aliyunAi.model.CreateImageGenerationTaskRequest;
+import com.zjj.zjjpicturebackend.aliyunAi.model.CreateImageGenerationTaskResponse;
 import com.zjj.zjjpicturebackend.exception.BusinessException;
 import com.zjj.zjjpicturebackend.exception.ErrorCode;
 import com.zjj.zjjpicturebackend.exception.ThrowUtils;
@@ -72,6 +75,8 @@ public class PictureServiceImpl extends ServiceImpl<PictureMapper, Picture>
     private SpaceService spaceService;
     @Resource
     private TransactionTemplate transactionTemplate;
+    @Resource
+    private AliYunAiApi aliYunAiApi;
 
     /**
      * 上传图片
@@ -600,6 +605,48 @@ public class PictureServiceImpl extends ServiceImpl<PictureMapper, Picture>
         }
     }
 
+    /**
+     *创建 AI 生图任务（文生图 / 图生图）
+     * @param createPictureAiImageRequest 生图请求
+     * @param loginUser                   当前登录用户
+     * @return
+     */
+    @Override
+    public CreateImageGenerationTaskResponse createPictureAiImageTask(CreatePictureAiImageRequest createPictureAiImageRequest, User loginUser) {
+        //参数校验
+        ThrowUtils.throwIf(createPictureAiImageRequest == null, ErrorCode.PARAMS_ERROR, "生图参数为空");
+        ThrowUtils.throwIf(loginUser == null, ErrorCode.NOT_LOGIN_ERROR);
+        String prompt = createPictureAiImageRequest.getPrompt();
+        ThrowUtils.throwIf(StrUtil.isBlank(prompt), ErrorCode.PARAMS_ERROR, "提示词不能为空");
+        // 组装百炼请求
+        CreateImageGenerationTaskRequest createImageGenerationTaskRequest = new CreateImageGenerationTaskRequest();
+        createImageGenerationTaskRequest.setModel(createPictureAiImageRequest.getModel());
+        List<CreateImageGenerationTaskRequest.ContentItem> contentItemList;
+        Long pictureId = createPictureAiImageRequest.getPictureId();
+        if (pictureId == null) {
+            // 文生图：content 里只放一个 text
+            contentItemList = List.of(CreateImageGenerationTaskRequest.ContentItem.ofText(prompt));
+        } else {
+            // 图生图：先取参考图、校验权限，再拼 image + text
+            Picture picture = this.getById(pictureId);
+            ThrowUtils.throwIf(picture == null, ErrorCode.NOT_FOUND_ERROR, "参考图片不存在");
+            this.checkPictureAuth(loginUser, picture);
+            contentItemList = List.of(
+                    CreateImageGenerationTaskRequest.ContentItem.ofImage(picture.getUrl()),
+                    CreateImageGenerationTaskRequest.ContentItem.ofText(prompt)
+            );
+        }
+        CreateImageGenerationTaskRequest.Message message = new CreateImageGenerationTaskRequest.Message();
+        message.setContent(contentItemList);
+        CreateImageGenerationTaskRequest.Input input = new CreateImageGenerationTaskRequest.Input();
+        // 只支持单轮对话，因此 messages 里只能有一个元素
+        input.setMessages(List.of(message));
+        createImageGenerationTaskRequest.setInput(input);
+        // 生成参数直接透传前端传来的参数
+        createImageGenerationTaskRequest.setParameters(createPictureAiImageRequest.getParameters());
+        // 创建任务
+        return aliYunAiApi.createImageGenerationTask(createImageGenerationTaskRequest);
+    }
 
     @Override
     public void checkPictureAuth(User loginUser, Picture picture) {

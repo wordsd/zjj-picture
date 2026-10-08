@@ -6,6 +6,9 @@ import cn.hutool.json.JSONUtil;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.github.benmanes.caffeine.cache.Cache;
 import com.github.benmanes.caffeine.cache.Caffeine;
+import com.zjj.zjjpicturebackend.aliyunAi.AliYunAiApi;
+import com.zjj.zjjpicturebackend.aliyunAi.model.CreateImageGenerationTaskResponse;
+import com.zjj.zjjpicturebackend.aliyunAi.model.GetImageGenerationTaskResponse;
 import com.zjj.zjjpicturebackend.annotation.AuthCheck;
 import com.zjj.zjjpicturebackend.common.BaseResponse;
 import com.zjj.zjjpicturebackend.common.DeleteRequest;
@@ -53,6 +56,8 @@ public class PictureController {
     private TransactionTemplate transactionTemplate;
     @Resource
     private SpaceService spaceService;
+    @Resource
+    private AliYunAiApi aliYunAiApi;
 
     private final Cache<String, String> LOCAL_CACHE = Caffeine.newBuilder().initialCapacity(1024)
             .maximumSize(10000L)
@@ -405,5 +410,47 @@ public class PictureController {
         return ResultUtils.success(pictureTagCategory);
     }
 
+    /**
+     * 创建 AI 生图任务（文生图）
+     * <p>
+     * 只需要提示词，不需要参考图片
+     */
+    @PostMapping("/ai/text_to_image/create_task")
+    public BaseResponse<CreateImageGenerationTaskResponse> createTextToImageTask(@RequestBody CreatePictureAiImageRequest createPictureAiImageRequest,
+                                                                                HttpServletRequest request) {
+        ThrowUtils.throwIf(createPictureAiImageRequest == null, ErrorCode.PARAMS_ERROR);
+        // 文生图强制不带参考图，避免与图生图接口语义混淆
+        createPictureAiImageRequest.setPictureId(null);
+        User loginUser = userService.getLoginUser(request);
+        CreateImageGenerationTaskResponse response = pictureService.createPictureAiImageTask(createPictureAiImageRequest, loginUser);
+        return ResultUtils.success(response);
+    }
+
+    /**
+     * 创建 AI 生图任务（图生图）
+     * <p>
+     * 必须传参考图片 id，会校验该图片的操作权限
+     */
+    @PostMapping("/ai/image_to_image/create_task")
+    public BaseResponse<CreateImageGenerationTaskResponse> createImageToImageTask(@RequestBody CreatePictureAiImageRequest createPictureAiImageRequest,
+                                                                                 HttpServletRequest request) {
+        ThrowUtils.throwIf(createPictureAiImageRequest == null || createPictureAiImageRequest.getPictureId() == null,
+                ErrorCode.PARAMS_ERROR, "图生图必须传参考图片 id");
+        User loginUser = userService.getLoginUser(request);
+        CreateImageGenerationTaskResponse response = pictureService.createPictureAiImageTask(createPictureAiImageRequest, loginUser);
+        return ResultUtils.success(response);
+    }
+
+    /**
+     * 查询 AI 生图任务（文生图 / 图生图共用）
+     * <p>
+     * 生成结果在返回的 output.choices[0].message.content[0].image
+     */
+    @GetMapping("/ai/get_task")
+    public BaseResponse<GetImageGenerationTaskResponse> getAiImageTask(String taskId) {
+        ThrowUtils.throwIf(taskId == null || taskId.isBlank(), ErrorCode.PARAMS_ERROR, "任务 id 不能为空");
+        GetImageGenerationTaskResponse task = aliYunAiApi.getImageGenerationTask(taskId);
+        return ResultUtils.success(task);
+    }
 
 }
