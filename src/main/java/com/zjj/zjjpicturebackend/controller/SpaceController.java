@@ -2,6 +2,7 @@ package com.zjj.zjjpicturebackend.controller;
 
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.zjj.zjjpicturebackend.annotation.AuthCheck;
+import com.zjj.zjjpicturebackend.auth.SpaceUserAuthManager;
 import com.zjj.zjjpicturebackend.common.BaseResponse;
 import com.zjj.zjjpicturebackend.common.DeleteRequest;
 import com.zjj.zjjpicturebackend.common.ResultUtils;
@@ -38,6 +39,8 @@ public class SpaceController {
 
     @Resource
     private UserService userService;
+    @Resource
+    private SpaceUserAuthManager spaceUserAuthManager;
 
     // ==================== 用户侧接口 ====================
 
@@ -79,15 +82,17 @@ public class SpaceController {
         return ResultUtils.success(true);
     }
 
-    /**
-     * 根据 id 获取空间（封装类，包含创建人信息）
-     */
     @GetMapping("/get/vo")
     public BaseResponse<SpaceVO> getSpaceVOById(long id, HttpServletRequest request) {
         ThrowUtils.throwIf(id <= 0, ErrorCode.PARAMS_ERROR);
+        // 查询数据库
         Space space = spaceService.getById(id);
         ThrowUtils.throwIf(space == null, ErrorCode.NOT_FOUND_ERROR);
-        SpaceVO spaceVO = spaceService.getSpaceVO(space);
+        SpaceVO spaceVO = spaceService.getSpaceVO(space, request);
+        User loginUser = userService.getLoginUser(request);
+        List<String> permissionList = spaceUserAuthManager.getPermissionList(space, loginUser);
+        spaceVO.setPermissionList(permissionList);
+        // 获取封装类
         return ResultUtils.success(spaceVO);
     }
 

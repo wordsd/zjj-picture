@@ -7,6 +7,7 @@ import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
+import com.zjj.zjjpicturebackend.auth.StpKit;
 import com.zjj.zjjpicturebackend.constant.UserConstant;
 import com.zjj.zjjpicturebackend.exception.BusinessException;
 import com.zjj.zjjpicturebackend.exception.ErrorCode;
@@ -166,7 +167,9 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User>
 
         // 4.记录用户的登录态（session）
         request.getSession().setAttribute(UserConstant.USER_LOGIN_STATE, queryUser);
-
+        //记录用户的登录态到Sa-token,便于空间鉴权是使用，注意保证该用户信息与SpringSession中的信息过期时间一致
+        StpKit.SPACE.login(queryUser.getId());
+        StpKit.SPACE.getSession().set(UserConstant.USER_LOGIN_STATE, queryUser);
         //组装返回VO，脱敏：不要返回密码
         return getLoginUserVO(queryUser);
     }

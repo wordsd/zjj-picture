@@ -5,7 +5,9 @@ import lombok.Data;
 import org.springframework.beans.BeanUtils;
 
 import java.io.Serializable;
+import java.util.ArrayList;
 import java.util.Date;
+import java.util.List;
 
 @Data
 public class SpaceVO implements Serializable {
@@ -18,6 +20,10 @@ public class SpaceVO implements Serializable {
      * 空间名称
      */
     private String spaceName;
+    /**
+     * 空间类型：0-私有 1-团队
+     */
+    private Integer spaceType;
 
     /**
      * 空间级别：0-普通版 1-专业版 2-旗舰版
@@ -68,6 +74,11 @@ public class SpaceVO implements Serializable {
      * 创建用户信息
      */
     private UserVO user;
+    /**
+     * 权限列表
+     */
+    private List<String> permissionList = new ArrayList<>();
+
 
     private static final long serialVersionUID = 1L;
 

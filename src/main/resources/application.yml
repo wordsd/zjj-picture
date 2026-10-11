@@ -18,6 +18,35 @@ spring:
     url: jdbc:mysql://localhost:3306/zjj_picture
     username: root
     password: ${MYSQL_PASSWORD:123456}
+  # 空间图片分表
+  shardingsphere:
+    dynamic:
+      enabled: false
+    datasource:
+      names: zjj_picture
+      zjj_picture:
+        type: com.zaxxer.hikari.HikariDataSource
+        driver-class-name: com.mysql.cj.jdbc.Driver
+        url: jdbc:mysql://localhost:3306/zjj_picture
+        username: root
+        password: 123456
+    rules:
+      sharding:
+        tables:
+          picture:
+            actual-data-nodes: zjj_picture.picture  # 动态分表
+            table-strategy:
+              standard:
+                sharding-column: spaceId
+                sharding-algorithm-name: picture_sharding_algorithm  # 使用自定义分片算法
+        sharding-algorithms:
+          picture_sharding_algorithm:
+            type: CLASS_BASED
+            props:
+              strategy: standard
+              algorithmClassName: com.zjj.zjjpicturebackend.manager.sharding.PictureShardingAlgorithm
+    props:
+      sql-show: true
   # session 配置
   session:
     store-type: redis
@@ -42,6 +71,7 @@ mybatis-plus:
       logic-delete-field: isDelete # 逻辑删除字段名
       logic-delete-value: 1 # 已删除
       logic-not-delete-value: 0 # 未删除
+    enable-sql-runner: true
 # 接口文档配置
 knife4j:
   enable: true
@@ -77,3 +107,4 @@ aliYunAi:
   base-url: ${DASHSCOPE_BASE_URL:}
   # 可选：qwen-image-3.0-pro / qwen-image-3.0 / qwen-image-2.1-pro
   model: ${DASHSCOPE_IMAGE_MODEL:qwen-image-3.0-pro}
+
