@@ -7,6 +7,7 @@ import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
+import com.zjj.zjjpicturebackend.auth.StpKit;
 import com.zjj.zjjpicturebackend.constant.UserConstant;
 import com.zjj.zjjpicturebackend.exception.BusinessException;
 import com.zjj.zjjpicturebackend.exception.ErrorCode;
@@ -19,6 +20,7 @@ import com.zjj.zjjpicturebackend.service.UserService;
 import com.zjj.zjjpicturebackend.mapper.UserMapper;
 import jakarta.annotation.Resource;
 import jakarta.servlet.http.HttpServletRequest;
+import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.lang3.StringUtils;
 import org.springframework.beans.BeanUtils;
 import org.springframework.stereotype.Service;
@@ -35,6 +37,7 @@ import java.util.stream.Collectors;
  * @description 针对表【user(用户)】的数据库操作Service实现
  * @createDate 2026-08-25 16:42:11
  */
+@Slf4j
 @Service
 public class UserServiceImpl extends ServiceImpl<UserMapper, User>
         implements UserService {
@@ -151,14 +154,25 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User>
         String encryptPassword = getEncryptPassword(userPassword);
 
         // 3.查询账号是否存在
-        User queryUser = userMapper.selectOne(
-                new com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper<User>()
+        List<User> userList = userMapper.selectList(
+                new LambdaQueryWrapper<User>()
                         .eq(User::getUserAccount, userAccount)
                         .eq(User::getUserPassword, encryptPassword)
         );
-        if (queryUser == null) {
+
+        if (userList.isEmpty()) {
             throw new BusinessException(ErrorCode.PARAMS_ERROR, "账号或密码错误");
         }
+
+// 如果查出了多个同账号同密码的用户，说明数据脏了，取第一个并记录警告，或者直接报错
+        if (userList.size() > 1) {
+            // 建议在这里打印日志，提醒管理员清理脏数据
+            log.warn("登录时发现重复账号数据，userAccount = {}", userAccount);
+            // 严格模式下可以直接抛出异常：throw new BusinessException(ErrorCode.SYSTEM_ERROR, "系统内部错误，请联系管理员");
+        }
+
+        User queryUser = userList.get(0);
+
         //判断用户是否被封禁（可选，你的User表有userStatus字段就打开）
     /*if(UserConstant.BAN_ROLE.equals(queryUser.getUserRole())){
         throw new BusinessException(ErrorCode.FORBIDDEN,"账号已被封禁");
@@ -166,7 +180,9 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User>
 
         // 4.记录用户的登录态（session）
         request.getSession().setAttribute(UserConstant.USER_LOGIN_STATE, queryUser);
-
+        //记录用户的登录态到Sa-token,便于空间鉴权是使用，注意保证该用户信息与SpringSession中的信息过期时间一致
+        StpKit.SPACE.login(queryUser.getId());
+        StpKit.SPACE.getSession().set(UserConstant.USER_LOGIN_STATE, queryUser);
         //组装返回VO，脱敏：不要返回密码
         return getLoginUserVO(queryUser);
     }

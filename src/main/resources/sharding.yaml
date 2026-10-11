@@ -1,0 +1,49 @@
+# ============================================================
+# ShardingSphere 5.5.3 配置
+# 由 ShardingSphereDriver 通过 spring.datasource.url=jdbc:shardingsphere:classpath:sharding.yaml 加载
+# 与旧版（5.2.0 的 spring.shardingsphere.*）的区别：
+#   1. 独立文件，顶层为 dataSources / rules / props
+#   2. 键名是 camelCase（不是 Spring 的 kebab-case）
+#   3. 数据源用 dataSourceClassName（原 type）+ standardJdbcUrl（5.5.x 的键名）
+#   4. 本文件由 ShardingSphere 自己解析，不走 Spring 的 ${} 占位符 —— 凭据必须写在这里
+# ============================================================
+dataSources:
+  zjj_picture:
+    dataSourceClassName: com.zaxxer.hikari.HikariDataSource
+    driverClassName: com.mysql.cj.jdbc.Driver
+    # 注意：5.5.3 的 StorageUnit 读取的是「标准属性 url」，由连接池的同义词表从池原生键映射而来。
+    # 若启动时仍报 StorageUnit.<init> 的 NullPointerException，把下面这行的键名 jdbcUrl 改成 url 再试
+    jdbcUrl: jdbc:mysql://localhost:3306/zjj_picture?useUnicode=true&characterEncoding=UTF-8&serverTimezone=Asia/Shanghai
+    username: root
+    password: 123456
+
+rules:
+  - !SHARDING
+    tables:
+      picture:
+        # 5.4.1 起 TableRule.checkRule() 要求数据节点非空，必须配置；
+        # 新增的 picture_{spaceId} 由 DynamicShardingManager 在运行时重写该配置
+        actualDataNodes: zjj_picture.picture
+        tableStrategy:
+          standard:
+            shardingColumn: spaceId
+            shardingAlgorithmName: picture_sharding_algorithm
+    shardingAlgorithms:
+      picture_sharding_algorithm:
+        type: CLASS_BASED
+        props:
+          strategy: STANDARD
+          algorithmClassName: com.zjj.zjjpicturebackend.manager.sharding.PictureShardingAlgorithm
+
+  # 单表规则：让 ShardingSphere 把数据源里其余的表（user / space / space_user / picture ...）
+  # 都加载为"单表"并通过路由，否则 5.5.x 的 binder 会因元数据中没有该表而抛：
+  #   TableNotFoundException: Table or view 'xxx' does not exist.
+  # "*.*" 表示所有库的所有表
+  - !SINGLE
+    tables:
+      - "*.*"
+
+props:
+  # 打印 ShardingSphere 改写的 SQL，便于确认分片是否命中
+  # 注意：5.5.3 起日志 topic 由 ShardingSphere-SQL 改为 org.apache.shardingsphere.sql
+  sql-show: true

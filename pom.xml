@@ -89,6 +89,95 @@
             <artifactId>fastjson2</artifactId>
             <version>2.0.52</version>
         </dependency>
+        <!-- Sa-Token 权限认证（Spring Boot 3 必须用 -spring-boot3-starter，用 -spring-boot-starter 会在启动时抛 SaTokenException） -->
+        <dependency>
+            <groupId>cn.dev33</groupId>
+            <artifactId>sa-token-spring-boot3-starter</artifactId>
+            <version>1.39.0</version>
+        </dependency>
+        <!-- Sa-Token 整合 Redis （使用 jackson 序列化方式） -->
+        <dependency>
+            <groupId>cn.dev33</groupId>
+            <artifactId>sa-token-redis-jackson</artifactId>
+            <version>1.39.0</version>
+        </dependency>
+        <!-- 提供Redis连接池 -->
+        <dependency>
+            <groupId>org.apache.commons</groupId>
+            <artifactId>commons-pool2</artifactId>
+        </dependency>
+        <!-- 分库分表（ShardingSphere 5.5.3）
+             5.3.0 起官方移除全部 Spring Boot Starter，改为「JDBC Driver + 独立 YAML」；
+             5.5.0 起 feature 模块解耦为可插拔，只引 shardingsphere-jdbc 会缺模块（且是运行期才炸），
+             故按官方 distribution/jdbc/pom.xml 的 default-dep 裁剪成 MySQL 场景补齐。
+             注意：不要固定 snakeyaml 版本 —— Boot 3.2 需要 2.x，而 5.5.3 已适配 2.x；
+             5.4.x 需 1.x 故与 Boot 3.2 互斥、不可用。 -->
+        <dependency>
+            <groupId>org.apache.shardingsphere</groupId>
+            <artifactId>shardingsphere-jdbc</artifactId>
+            <version>5.5.3</version>
+        </dependency>
+        <!-- 加载 jdbc:shardingsphere:classpath: 需要 -->
+        <dependency>
+            <groupId>org.apache.shardingsphere</groupId>
+            <artifactId>shardingsphere-infra-url-classpath</artifactId>
+            <version>5.5.3</version>
+            <scope>runtime</scope>
+        </dependency>
+        <!-- 数据源连接池 -->
+        <dependency>
+            <groupId>org.apache.shardingsphere</groupId>
+            <artifactId>shardingsphere-infra-data-source-pool-hikari</artifactId>
+            <version>5.5.3</version>
+            <scope>runtime</scope>
+        </dependency>
+        <!-- 分片 feature（编译期需要：DynamicShardingManager 用到 ShardingRule / ShardingRuleConfiguration） -->
+        <dependency>
+            <groupId>org.apache.shardingsphere</groupId>
+            <artifactId>shardingsphere-sharding-core</artifactId>
+            <version>5.5.3</version>
+        </dependency>
+        <dependency>
+            <groupId>org.apache.shardingsphere</groupId>
+            <artifactId>shardingsphere-sharding-mysql</artifactId>
+            <version>5.5.3</version>
+            <scope>runtime</scope>
+        </dependency>
+        <!-- MySQL 方言（5.5.3 新增 artifact） -->
+        <dependency>
+            <groupId>org.apache.shardingsphere</groupId>
+            <artifactId>shardingsphere-jdbc-dialect-mysql</artifactId>
+            <version>5.5.3</version>
+            <scope>runtime</scope>
+        </dependency>
+        <!-- 权限与 Standalone 模式仓储（Memory 仓储可避免元数据持久化） -->
+        <dependency>
+            <groupId>org.apache.shardingsphere</groupId>
+            <artifactId>shardingsphere-authority-simple</artifactId>
+            <version>5.5.3</version>
+            <scope>runtime</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.apache.shardingsphere</groupId>
+            <artifactId>shardingsphere-standalone-mode-repository-memory</artifactId>
+            <version>5.5.3</version>
+            <scope>runtime</scope>
+        </dependency>
+        <!-- JAXB 运行时：Java 11 起已从 JDK 移除，ShardingSphere 解析元数据时需要 -->
+        <dependency>
+            <groupId>org.glassfish.jaxb</groupId>
+            <artifactId>jaxb-runtime</artifactId>
+            <version>2.3.8</version>
+            <scope>runtime</scope>
+        </dependency>
+        <!-- Spring Boot 3.2.5 的 dependencyManagement 把 commons-lang3 锁在 3.13.0，
+             而 ShardingSphere 5.5.3 用到了 3.18.0 才引入的 org.apache.commons.lang3.Strings，
+             运行期会报 NoClassDefFoundError: org/apache/commons/lang3/Strings，故显式提版 -->
+        <dependency>
+            <groupId>org.apache.commons</groupId>
+            <artifactId>commons-lang3</artifactId>
+            <version>3.18.0</version>
+        </dependency>
 
         <!-- HTML 解析：https://jsoup.org/ -->
         <dependency>

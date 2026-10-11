@@ -13,11 +13,10 @@ spring:
   profiles:
     active: local
   # 数据库配置
+  # ShardingSphere 5.5.3 用「JDBC Driver + 独立 YAML」：数据源与分片规则全部写在 resources/sharding.yaml
   datasource:
-    driver-class-name: com.mysql.cj.jdbc.Driver
-    url: jdbc:mysql://localhost:3306/zjj_picture
-    username: root
-    password: ${MYSQL_PASSWORD:123456}
+    driver-class-name: org.apache.shardingsphere.driver.ShardingSphereDriver
+    url: jdbc:shardingsphere:classpath:sharding.yaml
   # session 配置
   session:
     store-type: redis
@@ -42,6 +41,7 @@ mybatis-plus:
       logic-delete-field: isDelete # 逻辑删除字段名
       logic-delete-value: 1 # 已删除
       logic-not-delete-value: 0 # 未删除
+    enable-sql-runner: true
 # 接口文档配置
 knife4j:
   enable: true
@@ -77,3 +77,10 @@ aliYunAi:
   base-url: ${DASHSCOPE_BASE_URL:}
   # 可选：qwen-image-3.0-pro / qwen-image-3.0 / qwen-image-2.1-pro
   model: ${DASHSCOPE_IMAGE_MODEL:qwen-image-3.0-pro}
+# 动态分表开关
+# 分片规则本身在 resources/sharding.yaml（ShardingSphere 5.4.1 的 Driver + YAML 方式，始终生效）；
+# 这里只控制「是否动态创建分表 + 刷新数据节点」，默认关闭
+sharding:
+  dynamic:
+    enabled: true
+

@@ -97,9 +97,9 @@ public class PictureServiceImpl extends ServiceImpl<PictureMapper, Picture>
             Space space = spaceService.getById(spaceId);
             ThrowUtils.throwIf(space == null, ErrorCode.NOT_FOUND_ERROR, "空间不存在");
             //必须是空间的管理员才能操作
-            if (!loginUser.getId().equals(space.getUserId())) {
-                ThrowUtils.throwIf(!userService.isAdmin(loginUser), ErrorCode.FORBIDDEN_ERROR, "无权限操作");
-            }
+//            if (!loginUser.getId().equals(space.getUserId())) {
+//                ThrowUtils.throwIf(!userService.isAdmin(loginUser), ErrorCode.FORBIDDEN_ERROR, "无权限操作");
+//            }
             if (space.getTotalCount() >= space.getMaxCount()) {
                 throw new BusinessException(ErrorCode.FORBIDDEN_ERROR, "空间条数不够");
             }
@@ -119,10 +119,10 @@ public class PictureServiceImpl extends ServiceImpl<PictureMapper, Picture>
             Picture oldPicture = this.getById(pictureId);
             boolean exists = this.lambdaQuery().eq(Picture::getId, pictureId).exists();
             ThrowUtils.throwIf(!exists, ErrorCode.NOT_FOUND_ERROR, "图片不存在");
-            //仅本人或者管理员可以编辑图片
-            if (!oldPicture.getUserId().equals(loginUser.getId()) && !userService.isAdmin(loginUser)) {
-                throw new RuntimeException("无权限编辑图片");
-            }
+//            //仅本人或者管理员可以编辑图片
+//            if (!oldPicture.getUserId().equals(loginUser.getId()) && !userService.isAdmin(loginUser)) {
+//                throw new RuntimeException("无权限编辑图片");
+//            }
             //校验空间是否一致
             //没传sapceId则默认为原空间
             if (spaceId == null) {

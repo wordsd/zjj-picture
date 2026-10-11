@@ -6,6 +6,7 @@ import com.zjj.zjjpicturebackend.model.dto.space.*;
 import com.baomidou.mybatisplus.extension.service.IService;
 import com.zjj.zjjpicturebackend.model.entity.User;
 import com.zjj.zjjpicturebackend.model.vo.SpaceVO;
+import jakarta.servlet.http.HttpServletRequest;
 
 /**
 * @author Administrator
@@ -53,7 +54,7 @@ public interface SpaceService extends IService<Space> {
      * @param space 空间实体
      * @return 空间 VO
      */
-    SpaceVO getSpaceVO(Space space);
+    SpaceVO getSpaceVO(Space space, HttpServletRequest request);
 
     /**
      * 分页获取空间封装信息
