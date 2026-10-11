@@ -5,6 +5,7 @@ import cn.hutool.core.util.ObjUtil;
 import cn.hutool.core.util.StrUtil;
 import cn.hutool.json.JSONUtil;
 import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
+import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
 import com.zjj.zjjpicturebackend.aliyunAi.AliYunAiApi;
@@ -173,8 +174,16 @@ public class PictureServiceImpl extends ServiceImpl<PictureMapper, Picture>
             picture.setEditTime(new Date());
         }
         Long finalSpaceId = spaceId;
+        Long finalPictureId = pictureId;
+        // 新增和更新分开处理：picture 按 spaceId 分表，UPDATE 语句里不能再出现分片键 spaceId，
+        // 否则 ShardingSphere 会抛 Can not update sharding value for table 'picture'
         transactionTemplate.execute(status -> {
-            boolean result = this.saveOrUpdate(picture);
+            boolean result;
+            if (finalPictureId == null) {
+                result = this.save(picture);
+            } else {
+                result = this.updatePictureById(picture, finalSpaceId);
+            }
             ThrowUtils.throwIf(!result, ErrorCode.OPERATION_ERROR, "图片上传失败");
             if (finalSpaceId != null) {
                 boolean update = spaceService.lambdaUpdate()
@@ -189,6 +198,95 @@ public class PictureServiceImpl extends ServiceImpl<PictureMapper, Picture>
 
 
         return PictureVO.objToVo(picture);
+    }
+
+    /**
+     * 更新已存在的图片（上传重写场景）
+     * <p>
+     * 不能用 {@code updateById} / {@code saveOrUpdate}：picture 按 spaceId 分表，
+     * 实体更新会把分片键 spaceId 一起拼进 SET 子句，ShardingSphere 会直接拒绝
+     * （Can not update sharding value for table 'picture'）。
+     * 这里改为显式指定要更新的列，并把 WHERE 条件限定在 spaceId 对应的分片上，
+     * 同时天然避免了跨分片更新。
+     *
+     * @param picture 待写入的图片信息（必须带 id）
+     * @param spaceId 图片所属空间 id，为空表示公共图库
+     * @return 是否更新成功
+     */
+    private boolean updatePictureById(Picture picture, Long spaceId) {
+        LambdaUpdateWrapper<Picture> updateWrapper = new LambdaUpdateWrapper<>();
+        applyPictureInfo(updateWrapper, picture);
+        updateWrapper.set(Picture::getUserId, picture.getUserId())
+                .set(Picture::getReviewStatus, picture.getReviewStatus())
+                .set(Picture::getReviewMessage, picture.getReviewMessage())
+                .set(Picture::getReviewerId, picture.getReviewerId())
+                .set(Picture::getReviewTime, picture.getReviewTime())
+                .set(Picture::getEditTime, picture.getEditTime())
+                .eq(Picture::getId, picture.getId());
+        // 分片键不由 SET 修改，只用来把 WHERE 条件落到对应分表
+        if (spaceId == null) {
+            updateWrapper.isNull(Picture::getSpaceId);
+        } else {
+            updateWrapper.eq(Picture::getSpaceId, spaceId);
+        }
+        return this.update(updateWrapper);
+    }
+
+    /**
+     * 更新图片的可编辑信息（名称、简介、分类、标签）
+     * <p>
+     * 与 {@link #updatePictureById} 同理，不能让分片键 spaceId 出现在 SET 子句里
+     *
+     * @param pictureEditRequest 编辑请求（必须带 id）
+     * @param loginUser          当前登录用户
+     * @return 是否更新成功
+     */
+    @Override
+    public boolean updatePictureInfo(PictureEditRequest pictureEditRequest, User loginUser) {
+        ThrowUtils.throwIf(pictureEditRequest == null || pictureEditRequest.getId() == null,
+                ErrorCode.PARAMS_ERROR);
+        ThrowUtils.throwIf(loginUser == null, ErrorCode.NOT_LOGIN_ERROR);
+        Long id = pictureEditRequest.getId();
+        Picture oldPicture = this.getById(id);
+        ThrowUtils.throwIf(oldPicture == null, ErrorCode.NOT_FOUND_ERROR);
+        LambdaUpdateWrapper<Picture> updateWrapper = new LambdaUpdateWrapper<>();
+        updateWrapper.set(StrUtil.isNotBlank(pictureEditRequest.getName()),
+                        Picture::getName, pictureEditRequest.getName())
+                .set(pictureEditRequest.getIntroduction() != null,
+                        Picture::getIntroduction, pictureEditRequest.getIntroduction())
+                .set(StrUtil.isNotBlank(pictureEditRequest.getCategory()),
+                        Picture::getCategory, pictureEditRequest.getCategory())
+                .set(CollUtil.isNotEmpty(pictureEditRequest.getTags()),
+                        Picture::getTags, JSONUtil.toJsonStr(pictureEditRequest.getTags()))
+                .set(Picture::getEditTime, new Date())
+                .eq(Picture::getId, id);
+        Long spaceId = oldPicture.getSpaceId();
+        if (spaceId == null) {
+            updateWrapper.isNull(Picture::getSpaceId);
+        } else {
+            updateWrapper.eq(Picture::getSpaceId, spaceId);
+        }
+        return this.update(updateWrapper);
+    }
+
+    /**
+     * 把上传结果里允许更新的列写入更新条件构造器
+     * <p>
+     * 刻意不包含分片键 spaceId
+     *
+     * @param updateWrapper 更新条件构造器
+     * @param picture       图片信息
+     */
+    private void applyPictureInfo(LambdaUpdateWrapper<Picture> updateWrapper, Picture picture) {
+        updateWrapper.set(Picture::getUrl, picture.getUrl())
+                .set(Picture::getThumbnailUrl, picture.getThumbnailUrl())
+                .set(Picture::getName, picture.getName())
+                .set(Picture::getPicSize, picture.getPicSize())
+                .set(Picture::getPicWidth, picture.getPicWidth())
+                .set(Picture::getPicHeight, picture.getPicHeight())
+                .set(Picture::getPicScale, picture.getPicScale())
+                .set(Picture::getPicFormat, picture.getPicFormat())
+                .set(Picture::getPicColor, picture.getPicColor());
     }
 
     /**
@@ -405,38 +503,26 @@ public class PictureServiceImpl extends ServiceImpl<PictureMapper, Picture>
         if (pictureList.isEmpty()){
             return;
         }
-        //更新分类和标签
-        pictureList.forEach(picture -> {
-            if(StrUtil.isNotBlank(category)){
-                picture.setCategory(category);
+        // 逐条更新：每条都带上 spaceId 定位分片，
+        // 并且只显式设置要改的列，避免把分片键 spaceId 写进 SET 子句
+        long seq = 1;
+        for (Picture picture : pictureList) {
+            LambdaUpdateWrapper<Picture> updateWrapper = new LambdaUpdateWrapper<>();
+            if (StrUtil.isNotBlank(category)) {
+                updateWrapper.set(Picture::getCategory, category);
             }
-            if(CollUtil.isNotEmpty(tags)){
-                picture.setTags(JSONUtil.toJsonStr(tags));
+            if (CollUtil.isNotEmpty(tags)) {
+                updateWrapper.set(Picture::getTags, JSONUtil.toJsonStr(tags));
             }
-        });
-        fillPictureWithName(pictureList, nameRule);
-        //批量更新
-        boolean result = this.updateBatchById(pictureList);
-        ThrowUtils.throwIf(!result, ErrorCode.OPERATION_ERROR, "批量更新失败");
-    }
-
-    /**
-     * 填充图片名称
-     * @param pictureList
-     * @param nameRule
-     */
-    private void fillPictureWithName(List<Picture> pictureList, String nameRule) {
-        if (CollUtil.isEmpty(pictureList) || StrUtil.isBlank(nameRule)) {
-            return;
-        }
-        long count=1;
-        try{
-            for(Picture picture : pictureList) {
-                nameRule.replaceAll("\\{序号}",String.valueOf(count++));
-                picture.setName(nameRule);
+            if (StrUtil.isNotBlank(nameRule)) {
+                // 用 replace 做字面量替换：{序号} 不是正则，从 1 开始递增
+                updateWrapper.set(Picture::getName, nameRule.replace("{序号}", String.valueOf(seq)));
             }
-        }catch (Exception e){
-            ThrowUtils.throwIf(true, ErrorCode.PARAMS_ERROR, "命名规则有误");
+            updateWrapper.eq(Picture::getId, picture.getId())
+                    .eq(Picture::getSpaceId, spaceId);
+            boolean result = this.update(updateWrapper);
+            ThrowUtils.throwIf(!result, ErrorCode.OPERATION_ERROR, "批量更新失败");
+            seq++;
         }
     }
 
@@ -465,12 +551,15 @@ public class PictureServiceImpl extends ServiceImpl<PictureMapper, Picture>
             ThrowUtils.throwIf(true, ErrorCode.PARAMS_ERROR, "已是该状态");
         }
 
-        //更新审核状态
+        //更新审核状态（走带分片定位的更新，避免把分片键 spaceId 写进 SET 子句）
         Picture updatePicture = new Picture();
-        BeanUtils.copyProperties(pictureReviewRequest, updatePicture);
-        updatePicture.setReviewTime(new Date());
+        updatePicture.setId(id);
+        updatePicture.setReviewStatus(reviewStatus);
+        updatePicture.setReviewMessage(pictureReviewRequest.getReviewMessage());
         updatePicture.setReviewerId(loginUser.getId());
-        boolean result = this.updateById(updatePicture);
+        updatePicture.setReviewTime(new Date());
+        updatePicture.setEditTime(new Date());
+        boolean result = this.updatePictureById(updatePicture, oldPicture.getSpaceId());
         ThrowUtils.throwIf(!result, ErrorCode.OPERATION_ERROR, "图片审核失败");
     }
 

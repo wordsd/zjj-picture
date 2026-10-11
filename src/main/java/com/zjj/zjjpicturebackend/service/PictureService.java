@@ -35,6 +35,18 @@ public interface PictureService extends IService<Picture> {
     void clearPicture(Picture oldPicture);
 
     /**
+     * 更新图片的可编辑信息（名称、简介、分类、标签）
+     * <p>
+     * 不要直接用 updateById：picture 按 spaceId 分表，
+     * 实体更新会把分片键 spaceId 拼进 SET 子句导致 ShardingSphere 拒绝执行
+     *
+     * @param pictureEditRequest 编辑请求
+     * @param loginUser          当前登录用户
+     * @return 是否更新成功
+     */
+    boolean updatePictureInfo(PictureEditRequest pictureEditRequest, User loginUser);
+
+    /**
      * 分页获取图片封装信息
      * @param picturePage
      * @param request

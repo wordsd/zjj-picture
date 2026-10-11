@@ -188,3 +188,25 @@ SELECT id
 FROM user
 WHERE userAccount LIKE 'perf_user_%'
 ORDER BY CAST(SUBSTRING(userAccount, 11) AS UNSIGNED);
+
+
+
+
+SELECT 'main'   AS src, COUNT(*) AS n FROM picture WHERE spaceId = 2109170210717200386
+UNION ALL SELECT 'shard', COUNT(*) FROM picture_2109170210717200386 WHERE spaceId = 2109170210717200386
+UNION ALL SELECT 'shard_soft_deleted', COUNT(*) FROM picture_2109170210717200386 WHERE spaceId = 2109170210717200386 AND isDelete = 1
+UNION ALL SELECT 'orphan_no_space', COUNT(*) FROM picture WHERE spaceId IS NULL AND isDelete = 0
+UNION ALL SELECT 'main_all', COUNT(*) FROM picture;
+
+
+
+-- ① 界面那 2 张图到底存在哪张表里
+SELECT 'shard' AS src, id, spaceId, name, isDelete FROM picture_2109170210717200386
+UNION ALL
+SELECT 'main', id, spaceId, name, isDelete FROM picture WHERE spaceId = 2109170210717200386;
+
+-- ② 主表里被软删除的行（排查是否留下残留）
+SELECT id, spaceId, name, isDelete FROM picture WHERE isDelete = 1;
+
+-- ③ 确认分表建表语句（这决定我下一步用哪套列名）
+SHOW CREATE TABLE picture_2109170210717200386;

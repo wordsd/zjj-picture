@@ -83,4 +83,12 @@ aliYunAi:
 sharding:
   dynamic:
     enabled: true
+  # 原生 MySQL 连接：仅用于「新建分表」和「迁移历史图片」，
+  # 这两件事必须绕开 ShardingSphere（新分表不在其元数据里），所以连接信息要与
+  # sharding.yaml 里 dataSources.zjj_picture 保持一致
+  raw-datasource:
+    jdbc-url: jdbc:mysql://localhost:3306/zjj_picture?useUnicode=true&characterEncoding=UTF-8&serverTimezone=Asia/Shanghai
+    username: root
+    password: 123456
+    driver-class-name: com.mysql.cj.jdbc.Driver
 
